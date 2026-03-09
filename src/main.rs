@@ -360,28 +360,39 @@ fn list_notes() -> Result<()> {
     if notes.is_empty() {
         println!("No notes yet. Add one with: mind add \"your note\"");
     } else {
-        // Print table header
-        println!("{}", "─".repeat(80).bright_black());
-        println!(
-            "{:<6} {:<20} {}",
-            "ID".bold(),
-            "DATE".bold(),
-            "CONTENT".bold()
-        );
-        println!("{}", "─".repeat(80).bright_black());
+        println!("{}", "─".repeat(100).bright_black());
 
-        // Print notes with alternating subtle background color
+        // Print notes with two-column layout
         for (index, (id, content, created_at)) in notes.iter().enumerate() {
             let datetime = chrono::DateTime::parse_from_rfc3339(created_at)
                 .context("Could not parse timestamp")?;
-            let formatted_time = datetime.format("%Y-%m-%d %H:%M:%S");
+            let date = datetime.format("%Y-%m-%d");
+            let time = datetime.format("%H:%M:%S");
 
-            let line = format!("{:<6} {:<20} {}", id, formatted_time, content);
+            // Split content into lines
+            let content_lines: Vec<&str> = content.lines().collect();
 
-            if index % 2 == 0 {
-                println!("{}", line.on_truecolor(18, 18, 18));
-            } else {
-                println!("{}", line);
+            // Print first line with metadata
+            if let Some(first_line) = content_lines.first() {
+                let metadata = format!("{:<4} {} {}", id, date, time);
+                let line = format!("{:<22} {}", metadata, first_line);
+
+                if index % 2 == 0 {
+                    println!("{}", line.on_truecolor(18, 18, 18));
+                } else {
+                    println!("{}", line);
+                }
+            }
+
+            // Print remaining lines with proper alignment
+            for line in content_lines.iter().skip(1) {
+                let aligned_line = format!("{:22} {}", "", line);
+
+                if index % 2 == 0 {
+                    println!("{}", aligned_line.on_truecolor(18, 18, 18));
+                } else {
+                    println!("{}", aligned_line);
+                }
             }
 
             // Add line break if next ID is not consecutive (notes are in DESC order)
@@ -393,7 +404,7 @@ fn list_notes() -> Result<()> {
             }
         }
 
-        println!("{}", "─".repeat(80).bright_black());
+        println!("{}", "─".repeat(100).bright_black());
         println!("Total: {} note(s)", notes.len());
     }
 
