@@ -106,11 +106,11 @@ impl OutlinerEditor {
             }
         }
 
-        // Position cursor
+        // Position cursor - calculate display width correctly
         let current_line = &self.lines[self.current_line];
-        let indent_str = "  ".repeat(current_line.indent);
-        let bullet_str = if current_line.indent == 0 { "• " } else { "◦ " };
-        let cursor_x = (indent_str.len() + bullet_str.len() + self.cursor_col) as u16;
+        let indent_spaces = current_line.indent * 2; // 2 spaces per indent
+        let bullet_width = 2; // "• " or "◦ " = 1 char + 1 space = 2 display positions
+        let cursor_x = (indent_spaces + bullet_width + self.cursor_col) as u16;
         let cursor_y = start_row + self.current_line as u16;
         execute!(stdout, cursor::MoveTo(cursor_x, cursor_y))?;
         stdout.flush()?;
@@ -119,13 +119,13 @@ impl OutlinerEditor {
     }
 
     fn handle_enter(&mut self) {
-        let current_content = self.lines[self.current_line].content.clone();
         let current_indent = self.lines[self.current_line].indent;
-        let has_colon = current_content.trim_end().ends_with(':');
 
         // Auto-add colon to first line if missing and it has content
-        if self.current_line == 0 && !current_content.is_empty() && !has_colon {
+        let mut has_colon = self.lines[self.current_line].content.trim_end().ends_with(':');
+        if self.current_line == 0 && !self.lines[self.current_line].content.is_empty() && !has_colon {
             self.lines[self.current_line].content.push(':');
+            has_colon = true; // Update has_colon after adding it
         }
 
         // Determine indent for new line
@@ -213,18 +213,28 @@ impl OutlinerEditor {
 }
 
 fn interactive_outliner_add() -> Result<String> {
+    // Ensure we have space at bottom - print 15 newlines to scroll up if needed
+    for _ in 0..15 {
+        println!();
+    }
+
+    // Move cursor back up
+    let (_, current_row) = cursor::position()?;
+    let start_row = current_row.saturating_sub(15);
+    execute!(stdout(), cursor::MoveTo(0, start_row))?;
+
     // Print header without clearing screen
     println!("{}", "─".repeat(80).bright_black());
     println!("{}", "  Interactive outliner - Esc to save, Tab/Shift+Tab to indent, Enter for new line".dimmed());
     println!("{}", "─".repeat(80).bright_black());
 
     // Get current cursor position (after header)
-    let (_, start_row) = cursor::position()?;
+    let (_, editor_start_row) = cursor::position()?;
 
     enable_raw_mode()?;
     let mut editor = OutlinerEditor::new();
 
-    editor.render(start_row)?;
+    editor.render(editor_start_row)?;
 
     loop {
         if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
@@ -232,7 +242,7 @@ fn interactive_outliner_add() -> Result<String> {
                 KeyCode::Esc => {
                     disable_raw_mode()?;
                     // Move cursor to end of content
-                    let final_row = start_row + editor.lines.len() as u16;
+                    let final_row = editor_start_row + editor.lines.len() as u16;
                     execute!(stdout(), cursor::MoveTo(0, final_row))?;
                     println!(); // Add blank line after
                     return Ok(editor.to_note_content());
@@ -275,7 +285,7 @@ fn interactive_outliner_add() -> Result<String> {
                 _ => {}
             }
 
-            editor.render(start_row)?;
+            editor.render(editor_start_row)?;
         }
     }
 }
