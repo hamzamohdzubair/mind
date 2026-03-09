@@ -1,12 +1,15 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Release script for mind
 # Usage: ./release.sh <version>
 # Example: ./release.sh 0.1.0-alpha.14
 
-set -e  # Exit on error
+set -euo pipefail  # Exit on error, undefined variables, and pipe failures
 
-if [ -z "$1" ]; then
+# Error handler
+trap 'echo "❌ Error on line $LINENO. Exiting..."; exit 1' ERR
+
+if [ -z "${1:-}" ]; then
     echo "Error: Version number required"
     echo "Usage: ./release.sh <version>"
     echo "Example: ./release.sh 0.1.0-alpha.14"
