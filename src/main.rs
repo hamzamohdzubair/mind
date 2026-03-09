@@ -542,11 +542,9 @@ fn confirm_deletion() -> Result<bool> {
         if let Event::Key(KeyEvent { code, .. }) = event::read()? {
             match code {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
-                    println!("y");
                     break Ok(true);
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
-                    println!("n");
                     break Ok(false);
                 }
                 _ => continue,
@@ -554,6 +552,13 @@ fn confirm_deletion() -> Result<bool> {
         }
     };
     disable_raw_mode()?;
+
+    // Print the response after disabling raw mode
+    match result {
+        Ok(true) => println!("y"),
+        Ok(false) => println!("n"),
+        Err(_) => {},
+    }
 
     result
 }
