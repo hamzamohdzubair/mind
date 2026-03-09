@@ -1,9 +1,9 @@
 [package]
 name = "mind"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 edition = "2024"
 authors = ["Hamza Mohd Zubair"]
-description = "A zettelkasten-inspired note-taking and task management CLI"
+description = "I am your mind, at your command, on the line: your command line mind"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/hamzamohdzubair/mind"
 keywords = ["note-taking", "zettelkasten", "task-management", "cli", "outliner"]

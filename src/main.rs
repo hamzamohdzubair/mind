@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "mind")]
-#[command(about = "A zettelkasten-inspired note-taking and task management CLI", long_about = None)]
+#[command(about = "I am your mind, at your command, on the line: your command line mind", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -19,6 +19,8 @@ enum Commands {
         /// The content of the note
         content: String,
     },
+    /// List all notes
+    List,
 }
 
 fn get_db_path() -> Result<PathBuf> {
@@ -65,11 +67,53 @@ fn add_note(content: &str) -> Result<()> {
     Ok(())
 }
 
+fn list_notes() -> Result<()> {
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)
+        .context("Could not open database")?;
+
+    init_db(&conn)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, content, created_at FROM notes ORDER BY id DESC"
+    )?;
+
+    let notes = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+
+    let mut count = 0;
+    for note in notes {
+        let (id, content, created_at) = note?;
+        count += 1;
+
+        // Parse and format the timestamp
+        let datetime = chrono::DateTime::parse_from_rfc3339(&created_at)
+            .context("Could not parse timestamp")?;
+        let formatted_time = datetime.format("%Y-%m-%d %H:%M:%S");
+
+        println!("[{}] {} | {}", id, formatted_time, content);
+    }
+
+    if count == 0 {
+        println!("No notes yet. Add one with: mind add \"your note\"");
+    } else {
+        println!("\nTotal: {} note(s)", count);
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Add { content } => add_note(&content)?,
+        Commands::List => list_notes()?,
     }
 
     Ok(())

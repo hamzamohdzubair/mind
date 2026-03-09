@@ -1,10 +1,12 @@
 # Mind
 
+> _I am your mind, at your command, on the line: your command line mind_
+
 A zettelkasten-inspired note-taking and task management CLI tool, influenced by Taskwarrior and Logseq.
 
 ## Status
 
-🚧 **Alpha** - Currently in early development. This is v0.1.0-alpha.1 with basic functionality.
+🚧 **Alpha** - Currently in early development. This is v0.1.0-alpha.2 with basic functionality.
 
 ## Installation
 
@@ -34,12 +36,21 @@ This stores the note in an SQLite database at `~/.local/share/mind/mind.db` with
 - Creation timestamp (ISO 8601/RFC3339 format)
 - Last updated timestamp
 
+### List all notes
+
+```bash
+mind list
+```
+
+Displays all your notes in reverse chronological order (newest first) with ID, timestamp, and content.
+
 ## Roadmap
 
 See [DESIGN.md](DESIGN.md) for the full vision and planned features.
 
 **Upcoming features:**
-- List and view notes
+- ✅ List notes
+- View individual notes
 - Task management (status, priority, due dates)
 - Links between notes ([[wiki-links]])
 - Tags
