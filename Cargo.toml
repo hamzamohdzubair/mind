@@ -1,0 +1,16 @@
+[package]
+name = "mind"
+version = "0.1.0-alpha.1"
+edition = "2024"
+authors = ["Your Name <your.email@example.com>"]
+description = "A zettelkasten-inspired note-taking and task management CLI"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/mind"
+keywords = ["note-taking", "zettelkasten", "task-management", "cli", "outliner"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = "0.4"
+anyhow = "1.0"
