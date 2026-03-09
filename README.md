@@ -6,7 +6,7 @@ A zettelkasten-inspired note-taking and task management CLI tool, influenced by 
 
 ## Status
 
-🚧 **Alpha** - Currently in early development. This is v0.1.0-alpha.8 with note management and comprehensive test coverage (>90%).
+🚧 **Alpha** - Currently in early development. This is v0.1.0-alpha.9 with interactive outliner and comprehensive test coverage (>90%).
 
 ## Installation
 
@@ -26,13 +26,28 @@ cargo install --path .
 
 ### Add a note
 
+**Quick add:**
 ```bash
 mind add "this is my first note"
 ```
 
-This stores the note in an SQLite database at `~/.local/share/mind/mind.db` with:
+**Interactive outliner mode:**
+```bash
+mind add
+```
+
+This opens an interactive editing space with:
+- **Enter**: Create new bullet point (child if parent has `:`, sibling otherwise)
+- **Tab**: Indent (make child, auto-adds `:` to parent)
+- **Shift+Tab**: Un-indent (make sibling)
+- **Arrow keys**: Navigate
+- **Escape**: Save and exit
+- Auto-adds `:` to first line and parent lines when creating children
+- First child cannot be un-indented (visually clear)
+
+Notes are stored in SQLite at `~/.local/share/mind/mind.db` with:
 - Unique ID (auto-incrementing)
-- Content
+- Content (formatted with bullets and indentation)
 - Creation timestamp (ISO 8601/RFC3339 format)
 - Last updated timestamp
 

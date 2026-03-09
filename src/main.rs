@@ -3,11 +3,13 @@ use chrono::Utc;
 use clap::{Parser, Subcommand};
 use colored::*;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent},
-    terminal::{disable_raw_mode, enable_raw_mode},
+    cursor,
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
 };
 use rusqlite::{Connection, params};
-use std::io::{self, Write};
+use std::io::{self, stdout, Write};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -21,10 +23,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Add a new note
+    /// Add a new note (interactive outliner if no content provided)
     Add {
-        /// The content of the note
-        content: String,
+        /// The content of the note (optional - omit to use interactive editor)
+        content: Option<String>,
     },
     /// List all notes
     List,
@@ -59,6 +61,214 @@ fn init_db(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+struct OutlineLine {
+    content: String,
+    indent: usize,
+}
+
+struct OutlinerEditor {
+    lines: Vec<OutlineLine>,
+    current_line: usize,
+    cursor_col: usize,
+}
+
+impl OutlinerEditor {
+    fn new() -> Self {
+        Self {
+            lines: vec![OutlineLine {
+                content: String::new(),
+                indent: 0,
+            }],
+            current_line: 0,
+            cursor_col: 0,
+        }
+    }
+
+    fn render(&self) -> Result<()> {
+        let mut stdout = stdout();
+        execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0, 0))?;
+
+        println!("{}", "─".repeat(80).bright_black());
+        println!("{}", "  Press Escape to save and exit, Tab/Shift+Tab to adjust indent".dimmed());
+        println!("{}", "─".repeat(80).bright_black());
+        println!();
+
+        for (idx, line) in self.lines.iter().enumerate() {
+            let indent_str = "  ".repeat(line.indent);
+            let bullet = if line.indent == 0 { "•" } else { "◦" };
+            let content = &line.content;
+
+            if idx == self.current_line {
+                print!("{}", format!("{}{} {}", indent_str, bullet, content).on_truecolor(18, 18, 18));
+                println!();
+            } else {
+                println!("{}{} {}", indent_str, bullet, content);
+            }
+        }
+
+        // Position cursor
+        let current_line = &self.lines[self.current_line];
+        let indent_str = "  ".repeat(current_line.indent);
+        let bullet = if current_line.indent == 0 { "•" } else { "◦" };
+        let cursor_x = (indent_str.len() + bullet.len() + 1 + self.cursor_col) as u16;
+        let cursor_y = (4 + self.current_line) as u16;
+        execute!(stdout, cursor::MoveTo(cursor_x, cursor_y))?;
+        stdout.flush()?;
+
+        Ok(())
+    }
+
+    fn handle_enter(&mut self) {
+        let current_line = &mut self.lines[self.current_line];
+        let has_colon = current_line.content.ends_with(':');
+
+        // Auto-add colon to first line if missing and it has content
+        if self.current_line == 0 && !current_line.content.is_empty() && !has_colon {
+            current_line.content.push(':');
+        }
+
+        // Determine indent for new line
+        let new_indent = if has_colon || self.current_line == 0 {
+            // Create child
+            current_line.indent + 1
+        } else {
+            // Create sibling
+            current_line.indent
+        };
+
+        // Insert new line
+        let new_line = OutlineLine {
+            content: String::new(),
+            indent: new_indent,
+        };
+        self.lines.insert(self.current_line + 1, new_line);
+        self.current_line += 1;
+        self.cursor_col = 0;
+    }
+
+    fn handle_tab(&mut self, shift: bool) {
+        if shift {
+            // Decrease indent (Shift+Tab)
+            let current_indent = self.lines[self.current_line].indent;
+            if current_indent > 0 && self.current_line > 0 {
+                let prev_indent = self.lines[self.current_line - 1].indent;
+                // Only allow if not the first child
+                if current_indent > prev_indent + 1 || self.current_line > 1 {
+                    self.lines[self.current_line].indent = current_indent.saturating_sub(1);
+                }
+            }
+        } else {
+            // Increase indent (Tab)
+            if self.current_line > 0 {
+                let prev_indent = self.lines[self.current_line - 1].indent;
+                let current_indent = self.lines[self.current_line].indent;
+
+                // Auto-add colon to previous line if making this a child
+                if current_indent == prev_indent && !self.lines[self.current_line - 1].content.ends_with(':') {
+                    self.lines[self.current_line - 1].content.push(':');
+                }
+
+                // Only allow indent if within one level of previous
+                if current_indent <= prev_indent {
+                    self.lines[self.current_line].indent = prev_indent + 1;
+                }
+            }
+        }
+    }
+
+    fn handle_char(&mut self, c: char) {
+        let current_line = &mut self.lines[self.current_line];
+        current_line.content.insert(self.cursor_col, c);
+        self.cursor_col += 1;
+    }
+
+    fn handle_backspace(&mut self) {
+        if self.cursor_col > 0 {
+            let current_line = &mut self.lines[self.current_line];
+            self.cursor_col -= 1;
+            current_line.content.remove(self.cursor_col);
+        } else if self.current_line > 0 {
+            // Delete current line if empty and not first
+            if self.lines[self.current_line].content.is_empty() {
+                self.lines.remove(self.current_line);
+                self.current_line -= 1;
+                self.cursor_col = self.lines[self.current_line].content.len();
+            }
+        }
+    }
+
+    fn to_note_content(&self) -> String {
+        self.lines
+            .iter()
+            .filter(|line| !line.content.is_empty())
+            .map(|line| {
+                let indent = "  ".repeat(line.indent);
+                let bullet = if line.indent == 0 { "•" } else { "◦" };
+                format!("{}{} {}", indent, bullet, line.content)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
+fn interactive_outliner_add() -> Result<String> {
+    enable_raw_mode()?;
+    let mut editor = OutlinerEditor::new();
+
+    editor.render()?;
+
+    loop {
+        if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+            match code {
+                KeyCode::Esc => {
+                    disable_raw_mode()?;
+                    execute!(stdout(), Clear(ClearType::All), cursor::MoveTo(0, 0))?;
+                    return Ok(editor.to_note_content());
+                }
+                KeyCode::Enter => {
+                    editor.handle_enter();
+                }
+                KeyCode::Tab => {
+                    editor.handle_tab(modifiers.contains(KeyModifiers::SHIFT));
+                }
+                KeyCode::Backspace => {
+                    editor.handle_backspace();
+                }
+                KeyCode::Char(c) => {
+                    editor.handle_char(c);
+                }
+                KeyCode::Up => {
+                    if editor.current_line > 0 {
+                        editor.current_line -= 1;
+                        editor.cursor_col = editor.cursor_col.min(editor.lines[editor.current_line].content.len());
+                    }
+                }
+                KeyCode::Down => {
+                    if editor.current_line < editor.lines.len() - 1 {
+                        editor.current_line += 1;
+                        editor.cursor_col = editor.cursor_col.min(editor.lines[editor.current_line].content.len());
+                    }
+                }
+                KeyCode::Left => {
+                    if editor.cursor_col > 0 {
+                        editor.cursor_col -= 1;
+                    }
+                }
+                KeyCode::Right => {
+                    let line_len = editor.lines[editor.current_line].content.len();
+                    if editor.cursor_col < line_len {
+                        editor.cursor_col += 1;
+                    }
+                }
+                _ => {}
+            }
+
+            editor.render()?;
+        }
+    }
+}
+
 fn add_note_to_db(conn: &Connection, content: &str, timestamp: &str) -> Result<i64> {
     conn.execute(
         "INSERT INTO notes (content, created_at, updated_at) VALUES (?1, ?2, ?3)",
@@ -69,7 +279,20 @@ fn add_note_to_db(conn: &Connection, content: &str, timestamp: &str) -> Result<i
     Ok(conn.last_insert_rowid())
 }
 
-fn add_note(content: &str) -> Result<()> {
+fn add_note(content: Option<&str>) -> Result<()> {
+    let final_content = match content {
+        Some(c) => c.to_string(),
+        None => {
+            // Enter interactive outliner mode
+            let content = interactive_outliner_add()?;
+            if content.is_empty() {
+                println!("No content entered. Note not saved.");
+                return Ok(());
+            }
+            content
+        }
+    };
+
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)
         .context("Could not open database")?;
@@ -77,7 +300,7 @@ fn add_note(content: &str) -> Result<()> {
     init_db(&conn)?;
 
     let now = Utc::now().to_rfc3339();
-    let note_id = add_note_to_db(&conn, content, &now)?;
+    let note_id = add_note_to_db(&conn, &final_content, &now)?;
 
     println!("Note added with ID: {}", note_id);
     Ok(())
@@ -321,7 +544,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Add { content } => add_note(&content)?,
+        Commands::Add { content } => add_note(content.as_deref())?,
         Commands::List => list_notes()?,
         Commands::Delete { filter } => delete_notes(&filter)?,
     }
