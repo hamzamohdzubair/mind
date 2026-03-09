@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "mind")]
+#[command(version)]
 #[command(about = "I am your mind, at your command, on the line: your command line mind", long_about = None)]
 struct Cli {
     #[command(subcommand)]
