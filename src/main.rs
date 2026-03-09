@@ -139,6 +139,14 @@ fn list_notes() -> Result<()> {
             } else {
                 println!("{}", line);
             }
+
+            // Add line break if next ID is not consecutive (notes are in DESC order)
+            if index < notes.len() - 1 {
+                let next_id = notes[index + 1].0;
+                if *id - next_id > 1 {
+                    println!();
+                }
+            }
         }
 
         println!("{}", "─".repeat(80).bright_black());
