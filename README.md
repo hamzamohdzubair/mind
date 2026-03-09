@@ -6,7 +6,7 @@ A zettelkasten-inspired note-taking and task management CLI tool, influenced by 
 
 ## Status
 
-🚧 **Alpha** - Currently in early development. This is v0.1.0-alpha.2 with basic functionality.
+🚧 **Alpha** - Currently in early development. This is v0.1.0-alpha.3 with basic functionality and comprehensive test coverage (>95%).
 
 ## Installation
 
