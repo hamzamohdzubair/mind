@@ -4,15 +4,23 @@
 # Usage: ./release.sh <version>
 # Example: ./release.sh 0.1.0-alpha.14
 
+# Prevent sourcing
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    IS_SOURCED=false
+else
+    echo "❌ Error: Do not source this script. Run it directly: ./release.sh <version>"
+    return 1
+fi
+
 set -euo pipefail  # Exit on error, undefined variables, and pipe failures
 
 # Error handler
-trap 'echo "❌ Error on line $LINENO. Exiting..."; exit 1' ERR
+trap 'echo "❌ Error on line $LINENO. Exiting..." >&2; exit 1' ERR
 
 if [ -z "${1:-}" ]; then
-    echo "Error: Version number required"
-    echo "Usage: ./release.sh <version>"
-    echo "Example: ./release.sh 0.1.0-alpha.14"
+    echo "❌ Error: Version number required" >&2
+    echo "Usage: ./release.sh <version>" >&2
+    echo "Example: ./release.sh 0.1.0-alpha.14" >&2
     exit 1
 fi
 
