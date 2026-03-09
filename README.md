@@ -6,7 +6,7 @@ A zettelkasten-inspired note-taking and task management CLI tool, influenced by 
 
 ## Status
 
-🚧 **Alpha** - Currently in early development. This is v0.1.0-alpha.3 with basic functionality and comprehensive test coverage (>95%).
+🚧 **Alpha** - Currently in early development. This is v0.1.0-alpha.4 with note management and comprehensive test coverage (>90%).
 
 ## Installation
 
@@ -42,14 +42,40 @@ This stores the note in an SQLite database at `~/.local/share/mind/mind.db` with
 mind list
 ```
 
-Displays all your notes in reverse chronological order (newest first) with ID, timestamp, and content.
+Displays all your notes in a styled table format with:
+- Alternating row colors for easy reading
+- Column headers (ID, DATE, CONTENT)
+- Reverse chronological order (newest first)
+
+### Delete notes
+
+```bash
+# Delete a single note
+mind delete 5
+mind del 5        # shorthand alias
+
+# Delete multiple notes (comma-separated)
+mind delete 1,2,5
+
+# Delete a range of notes
+mind delete 3-6
+
+# Future: Delete by tag
+mind delete #work  # coming soon
+```
+
+The delete command supports multiple filter formats and always asks for confirmation with a single-key press (y/n).
 
 ## Roadmap
 
 See [DESIGN.md](DESIGN.md) for the full vision and planned features.
 
+**Completed features:**
+- ✅ Add notes
+- ✅ List notes (styled table view)
+- ✅ Delete notes (by ID, range, or comma-separated)
+
 **Upcoming features:**
-- ✅ List notes
 - View individual notes
 - Task management (status, priority, due dates)
 - Links between notes ([[wiki-links]])
