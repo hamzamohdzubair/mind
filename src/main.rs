@@ -253,6 +253,10 @@ fn interactive_outliner_add() -> Result<String> {
                 KeyCode::Tab => {
                     editor.handle_tab(modifiers.contains(KeyModifiers::SHIFT));
                 }
+                KeyCode::BackTab => {
+                    // Shift+Tab is sent as BackTab on most terminals
+                    editor.handle_tab(true);
+                }
                 KeyCode::Backspace => {
                     editor.handle_backspace();
                 }
@@ -360,9 +364,20 @@ fn list_notes() -> Result<()> {
     if notes.is_empty() {
         println!("No notes yet. Add one with: mind add \"your note\"");
     } else {
+        // Get terminal height
+        let (_, terminal_height) = crossterm::terminal::size()
+            .unwrap_or((80, 24)); // Default to 80x24 if can't detect
+
+        // Reserve lines for: header (1) + footer (2) + buffer (2) = 5 lines
+        let max_content_lines = (terminal_height as usize).saturating_sub(5);
+
         println!("{}", "─".repeat(100).bright_black());
 
-        // Print notes with two-column layout
+        let mut lines_printed = 0;
+        let mut notes_displayed = 0;
+        let mut truncated = false;
+
+        // Print notes with two-column layout: metadata on left, content on right
         for (index, (id, content, created_at)) in notes.iter().enumerate() {
             let datetime = chrono::DateTime::parse_from_rfc3339(created_at)
                 .context("Could not parse timestamp")?;
@@ -372,42 +387,80 @@ fn list_notes() -> Result<()> {
             // Split content into lines
             let content_lines: Vec<&str> = content.lines().collect();
 
-            // Print first line with metadata
-            if let Some(first_line) = content_lines.first() {
-                let metadata = format!("{:<4} {} {}", id, date, time);
-                // Calculate actual metadata width (ID:4 + space:1 + date:10 + space:1 + time:8 = 24)
-                let metadata_width = metadata.len();
-                let line = format!("{} {}", metadata, first_line);
+            // Calculate how many lines this note will take
+            let note_lines = content_lines.len().max(3);
+            let mut extra_lines = 0;
 
-                if index % 2 == 0 {
-                    println!("{}", line.on_truecolor(18, 18, 18));
-                } else {
-                    println!("{}", line);
-                }
-
-                // Print remaining lines with proper alignment matching the metadata width
-                for line in content_lines.iter().skip(1) {
-                    let aligned_line = format!("{:width$} {}", "", line, width = metadata_width);
-
-                    if index % 2 == 0 {
-                        println!("{}", aligned_line.on_truecolor(18, 18, 18));
-                    } else {
-                        println!("{}", aligned_line);
-                    }
-                }
-            }
-
-            // Add line break if next ID is not consecutive (notes are in DESC order)
+            // Check if there's a gap line after this note
             if index < notes.len() - 1 {
                 let next_id = notes[index + 1].0;
                 if *id - next_id > 1 {
-                    println!();
+                    extra_lines = 1;
                 }
+            }
+
+            // Check if we have room for this note
+            if lines_printed + note_lines + extra_lines > max_content_lines {
+                truncated = true;
+                break;
+            }
+
+            // Apply zebra striping
+            let apply_bg = |text: String| -> String {
+                if index % 2 == 0 {
+                    format!("{}", text.on_truecolor(18, 18, 18))
+                } else {
+                    text
+                }
+            };
+
+            // Left column width for metadata
+            let left_width = 12;
+
+            // Print first three lines with metadata
+            if let Some(line) = content_lines.get(0) {
+                println!("{}", apply_bg(format!("{:<width$} {}", id.to_string().bright_cyan().bold(), line, width = left_width)));
+            } else {
+                println!("{}", apply_bg(format!("{}", id.to_string().bright_cyan().bold())));
+            }
+
+            if let Some(line) = content_lines.get(1) {
+                println!("{}", apply_bg(format!("{:<width$} {}", date.to_string().dimmed(), line, width = left_width)));
+            } else {
+                println!("{}", apply_bg(format!("{:<width$}", date.to_string().dimmed(), width = left_width)));
+            }
+
+            if let Some(line) = content_lines.get(2) {
+                println!("{}", apply_bg(format!("{:<width$} {}", time.to_string().dimmed(), line, width = left_width)));
+            } else {
+                println!("{}", apply_bg(format!("{:<width$}", time.to_string().dimmed(), width = left_width)));
+            }
+
+            // Print remaining content lines with empty left column
+            for line in content_lines.iter().skip(3) {
+                println!("{}", apply_bg(format!("{:<width$} {}", "", line, width = left_width)));
+            }
+
+            lines_printed += note_lines;
+            notes_displayed += 1;
+
+            // Add line break if next ID is not consecutive (notes are in DESC order)
+            if extra_lines > 0 {
+                println!();
+                lines_printed += 1;
             }
         }
 
         println!("{}", "─".repeat(100).bright_black());
-        println!("Total: {} note(s)", notes.len());
+        if truncated {
+            println!("Showing {} of {} note(s) {}",
+                notes_displayed,
+                notes.len(),
+                "(use delete or view commands to manage)".dimmed()
+            );
+        } else {
+            println!("Total: {} note(s)", notes.len());
+        }
     }
 
     Ok(())
