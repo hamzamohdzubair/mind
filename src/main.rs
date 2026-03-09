@@ -126,7 +126,7 @@ fn list_notes() -> Result<()> {
         );
         println!("{}", "─".repeat(80).bright_black());
 
-        // Print notes with alternating subtle styling
+        // Print notes with alternating subtle background color
         for (index, (id, content, created_at)) in notes.iter().enumerate() {
             let datetime = chrono::DateTime::parse_from_rfc3339(created_at)
                 .context("Could not parse timestamp")?;
@@ -135,7 +135,7 @@ fn list_notes() -> Result<()> {
             let line = format!("{:<6} {:<20} {}", id, formatted_time, content);
 
             if index % 2 == 0 {
-                println!("{}", line.dimmed());
+                println!("{}", line.on_truecolor(18, 18, 18));
             } else {
                 println!("{}", line);
             }
