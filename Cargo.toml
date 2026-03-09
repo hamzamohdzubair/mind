@@ -2,10 +2,10 @@
 name = "mind"
 version = "0.1.0-alpha.1"
 edition = "2024"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Hamza Mohd Zubair"]
 description = "A zettelkasten-inspired note-taking and task management CLI"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/mind"
+repository = "https://github.com/hamzamohdzubair/mind"
 keywords = ["note-taking", "zettelkasten", "task-management", "cli", "outliner"]
 categories = ["command-line-utilities"]
 

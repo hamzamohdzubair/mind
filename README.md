@@ -15,7 +15,7 @@ cargo install mind
 Or build from source:
 
 ```bash
-git clone https://github.com/yourusername/mind
+git clone https://github.com/hamzamohdzubair/mind
 cd mind
 cargo install --path .
 ```
