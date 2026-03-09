@@ -85,34 +85,33 @@ impl OutlinerEditor {
         }
     }
 
-    fn render(&self) -> Result<()> {
+    fn render(&self, start_row: u16) -> Result<()> {
         let mut stdout = stdout();
-        execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0, 0))?;
 
-        println!("{}", "─".repeat(80).bright_black());
-        println!("{}", "  Press Escape to save and exit, Tab/Shift+Tab to adjust indent".dimmed());
-        println!("{}", "─".repeat(80).bright_black());
-        println!();
+        // Clear from start row downward
+        execute!(stdout, cursor::MoveTo(0, start_row))?;
+        execute!(stdout, Clear(ClearType::FromCursorDown))?;
 
         for (idx, line) in self.lines.iter().enumerate() {
+            execute!(stdout, cursor::MoveTo(0, start_row + idx as u16))?;
+
             let indent_str = "  ".repeat(line.indent);
             let bullet = if line.indent == 0 { "•" } else { "◦" };
             let content = &line.content;
 
             if idx == self.current_line {
                 print!("{}", format!("{}{} {}", indent_str, bullet, content).on_truecolor(18, 18, 18));
-                println!();
             } else {
-                println!("{}{} {}", indent_str, bullet, content);
+                print!("{}{} {}", indent_str, bullet, content);
             }
         }
 
         // Position cursor
         let current_line = &self.lines[self.current_line];
         let indent_str = "  ".repeat(current_line.indent);
-        let bullet = if current_line.indent == 0 { "•" } else { "◦" };
-        let cursor_x = (indent_str.len() + bullet.len() + 1 + self.cursor_col) as u16;
-        let cursor_y = (4 + self.current_line) as u16;
+        let bullet_str = if current_line.indent == 0 { "• " } else { "◦ " };
+        let cursor_x = (indent_str.len() + bullet_str.len() + self.cursor_col) as u16;
+        let cursor_y = start_row + self.current_line as u16;
         execute!(stdout, cursor::MoveTo(cursor_x, cursor_y))?;
         stdout.flush()?;
 
@@ -120,21 +119,22 @@ impl OutlinerEditor {
     }
 
     fn handle_enter(&mut self) {
-        let current_line = &mut self.lines[self.current_line];
-        let has_colon = current_line.content.ends_with(':');
+        let current_content = self.lines[self.current_line].content.clone();
+        let current_indent = self.lines[self.current_line].indent;
+        let has_colon = current_content.trim_end().ends_with(':');
 
         // Auto-add colon to first line if missing and it has content
-        if self.current_line == 0 && !current_line.content.is_empty() && !has_colon {
-            current_line.content.push(':');
+        if self.current_line == 0 && !current_content.is_empty() && !has_colon {
+            self.lines[self.current_line].content.push(':');
         }
 
         // Determine indent for new line
-        let new_indent = if has_colon || self.current_line == 0 {
-            // Create child
-            current_line.indent + 1
+        let new_indent = if has_colon {
+            // Create child if current line has colon
+            current_indent + 1
         } else {
-            // Create sibling
-            current_line.indent
+            // Create sibling at same level
+            current_indent
         };
 
         // Insert new line
@@ -213,17 +213,28 @@ impl OutlinerEditor {
 }
 
 fn interactive_outliner_add() -> Result<String> {
+    // Print header without clearing screen
+    println!("{}", "─".repeat(80).bright_black());
+    println!("{}", "  Interactive outliner - Esc to save, Tab/Shift+Tab to indent, Enter for new line".dimmed());
+    println!("{}", "─".repeat(80).bright_black());
+
+    // Get current cursor position (after header)
+    let (_, start_row) = cursor::position()?;
+
     enable_raw_mode()?;
     let mut editor = OutlinerEditor::new();
 
-    editor.render()?;
+    editor.render(start_row)?;
 
     loop {
         if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
             match code {
                 KeyCode::Esc => {
                     disable_raw_mode()?;
-                    execute!(stdout(), Clear(ClearType::All), cursor::MoveTo(0, 0))?;
+                    // Move cursor to end of content
+                    let final_row = start_row + editor.lines.len() as u16;
+                    execute!(stdout(), cursor::MoveTo(0, final_row))?;
+                    println!(); // Add blank line after
                     return Ok(editor.to_note_content());
                 }
                 KeyCode::Enter => {
@@ -264,7 +275,7 @@ fn interactive_outliner_add() -> Result<String> {
                 _ => {}
             }
 
-            editor.render()?;
+            editor.render(start_row)?;
         }
     }
 }

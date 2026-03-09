@@ -1,6 +1,6 @@
 [package]
 name = "mind"
-version = "0.1.0-alpha.9"
+version = "0.1.0-alpha.10"
 edition = "2024"
 authors = ["Hamza Mohd Zubair"]
 description = "I am your mind, at your command, on the line: your command line mind"
