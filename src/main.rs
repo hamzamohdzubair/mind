@@ -375,23 +375,25 @@ fn list_notes() -> Result<()> {
             // Print first line with metadata
             if let Some(first_line) = content_lines.first() {
                 let metadata = format!("{:<4} {} {}", id, date, time);
-                let line = format!("{:<22} {}", metadata, first_line);
+                // Calculate actual metadata width (ID:4 + space:1 + date:10 + space:1 + time:8 = 24)
+                let metadata_width = metadata.len();
+                let line = format!("{} {}", metadata, first_line);
 
                 if index % 2 == 0 {
                     println!("{}", line.on_truecolor(18, 18, 18));
                 } else {
                     println!("{}", line);
                 }
-            }
 
-            // Print remaining lines with proper alignment
-            for line in content_lines.iter().skip(1) {
-                let aligned_line = format!("{:22} {}", "", line);
+                // Print remaining lines with proper alignment matching the metadata width
+                for line in content_lines.iter().skip(1) {
+                    let aligned_line = format!("{:width$} {}", "", line, width = metadata_width);
 
-                if index % 2 == 0 {
-                    println!("{}", aligned_line.on_truecolor(18, 18, 18));
-                } else {
-                    println!("{}", aligned_line);
+                    if index % 2 == 0 {
+                        println!("{}", aligned_line.on_truecolor(18, 18, 18));
+                    } else {
+                        println!("{}", aligned_line);
+                    }
                 }
             }
 
@@ -993,7 +995,7 @@ mod tests {
         assert!(!db_path.exists());
 
         // This would normally print to stdout, but we're just testing it runs
-        let result = add_note("Test note from integration test");
+        let result = add_note(Some("Test note from integration test"));
 
         // Should succeed
         assert!(result.is_ok());
@@ -1029,8 +1031,8 @@ mod tests {
         let temp_dir = setup_test_env()?;
 
         // Add some notes first
-        add_note("First note")?;
-        add_note("Second note")?;
+        add_note(Some("First note"))?;
+        add_note(Some("Second note"))?;
 
         // This would normally print to stdout
         let result = list_notes();
@@ -1183,9 +1185,9 @@ mod tests {
         let temp_dir = setup_test_env()?;
 
         // Add multiple notes
-        add_note("First integration note")?;
-        add_note("Second integration note")?;
-        add_note("Third integration note")?;
+        add_note(Some("First integration note"))?;
+        add_note(Some("Second integration note"))?;
+        add_note(Some("Third integration note"))?;
 
         // Verify all notes in database
         let db_path = temp_dir.path().join(".local/share/mind/mind.db");
