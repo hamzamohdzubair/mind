@@ -353,6 +353,65 @@ fn list_notes_from_db(conn: &Connection) -> Result<Vec<(i64, String, String)>> {
     Ok(result)
 }
 
+fn build_notes_output(notes: &[(i64, String, String)]) -> Result<String> {
+    let mut lines: Vec<String> = Vec::new();
+    lines.push(format!("{}", "─".repeat(100).bright_black()));
+
+    for (index, (id, content, created_at)) in notes.iter().enumerate() {
+        let datetime = chrono::DateTime::parse_from_rfc3339(created_at)
+            .context("Could not parse timestamp")?;
+        let date = datetime.format("%Y-%m-%d");
+        let time = datetime.format("%H:%M:%S");
+
+        let content_lines: Vec<&str> = content.lines().collect();
+
+        let apply_bg = |text: String| -> String {
+            if index % 2 == 0 {
+                format!("{}", text.on_truecolor(18, 18, 18))
+            } else {
+                text
+            }
+        };
+
+        let left_width = 12;
+
+        if let Some(line) = content_lines.first() {
+            lines.push(apply_bg(format!("{:<width$} {}", id.to_string().bright_cyan().bold(), line, width = left_width)));
+        } else {
+            lines.push(apply_bg(format!("{}", id.to_string().bright_cyan().bold())));
+        }
+
+        if let Some(line) = content_lines.get(1) {
+            lines.push(apply_bg(format!("{:<width$} {}", date.to_string().dimmed(), line, width = left_width)));
+        } else {
+            lines.push(apply_bg(format!("{:<width$}", date.to_string().dimmed(), width = left_width)));
+        }
+
+        if let Some(line) = content_lines.get(2) {
+            lines.push(apply_bg(format!("{:<width$} {}", time.to_string().dimmed(), line, width = left_width)));
+        } else {
+            lines.push(apply_bg(format!("{:<width$}", time.to_string().dimmed(), width = left_width)));
+        }
+
+        for line in content_lines.iter().skip(3) {
+            lines.push(apply_bg(format!("{:<width$} {}", "", line, width = left_width)));
+        }
+
+        // Add blank line between non-consecutive IDs (notes are in DESC order)
+        if index < notes.len() - 1 {
+            let next_id = notes[index + 1].0;
+            if *id - next_id > 1 {
+                lines.push(String::new());
+            }
+        }
+    }
+
+    lines.push(format!("{}", "─".repeat(100).bright_black()));
+    lines.push(format!("Total: {} note(s)", notes.len()));
+
+    Ok(lines.join("\n") + "\n")
+}
+
 fn list_notes() -> Result<()> {
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)
@@ -364,104 +423,37 @@ fn list_notes() -> Result<()> {
 
     if notes.is_empty() {
         println!("No notes yet. Add one with: mind add \"your note\"");
-    } else {
-        // Get terminal height
-        let (_, terminal_height) = crossterm::terminal::size()
-            .unwrap_or((80, 24)); // Default to 80x24 if can't detect
+        return Ok(());
+    }
 
-        // Reserve lines for: header (1) + footer (2) + buffer (2) = 5 lines
-        let max_content_lines = (terminal_height as usize).saturating_sub(5);
+    // Force ANSI colors so the output stays colored when piped to a pager
+    colored::control::set_override(true);
+    let output = build_notes_output(&notes)?;
+    colored::control::unset_override();
 
-        println!("{}", "─".repeat(100).bright_black());
+    let (_, terminal_height) = crossterm::terminal::size().unwrap_or((80, 24));
+    let line_count = output.lines().count();
 
-        let mut lines_printed = 0;
-        let mut notes_displayed = 0;
-        let mut truncated = false;
-
-        // Print notes with two-column layout: metadata on left, content on right
-        for (index, (id, content, created_at)) in notes.iter().enumerate() {
-            let datetime = chrono::DateTime::parse_from_rfc3339(created_at)
-                .context("Could not parse timestamp")?;
-            let date = datetime.format("%Y-%m-%d");
-            let time = datetime.format("%H:%M:%S");
-
-            // Split content into lines
-            let content_lines: Vec<&str> = content.lines().collect();
-
-            // Calculate how many lines this note will take
-            let note_lines = content_lines.len().max(3);
-            let mut extra_lines = 0;
-
-            // Check if there's a gap line after this note
-            if index < notes.len() - 1 {
-                let next_id = notes[index + 1].0;
-                if *id - next_id > 1 {
-                    extra_lines = 1;
-                }
-            }
-
-            // Check if we have room for this note
-            if lines_printed + note_lines + extra_lines > max_content_lines {
-                truncated = true;
-                break;
-            }
-
-            // Apply zebra striping
-            let apply_bg = |text: String| -> String {
-                if index % 2 == 0 {
-                    format!("{}", text.on_truecolor(18, 18, 18))
-                } else {
-                    text
-                }
-            };
-
-            // Left column width for metadata
-            let left_width = 12;
-
-            // Print first three lines with metadata
-            if let Some(line) = content_lines.get(0) {
-                println!("{}", apply_bg(format!("{:<width$} {}", id.to_string().bright_cyan().bold(), line, width = left_width)));
-            } else {
-                println!("{}", apply_bg(format!("{}", id.to_string().bright_cyan().bold())));
-            }
-
-            if let Some(line) = content_lines.get(1) {
-                println!("{}", apply_bg(format!("{:<width$} {}", date.to_string().dimmed(), line, width = left_width)));
-            } else {
-                println!("{}", apply_bg(format!("{:<width$}", date.to_string().dimmed(), width = left_width)));
-            }
-
-            if let Some(line) = content_lines.get(2) {
-                println!("{}", apply_bg(format!("{:<width$} {}", time.to_string().dimmed(), line, width = left_width)));
-            } else {
-                println!("{}", apply_bg(format!("{:<width$}", time.to_string().dimmed(), width = left_width)));
-            }
-
-            // Print remaining content lines with empty left column
-            for line in content_lines.iter().skip(3) {
-                println!("{}", apply_bg(format!("{:<width$} {}", "", line, width = left_width)));
-            }
-
-            lines_printed += note_lines;
-            notes_displayed += 1;
-
-            // Add line break if next ID is not consecutive (notes are in DESC order)
-            if extra_lines > 0 {
-                println!();
-                lines_printed += 1;
-            }
-        }
-
-        println!("{}", "─".repeat(100).bright_black());
-        if truncated {
-            println!("Showing {} of {} note(s) {}",
-                notes_displayed,
-                notes.len(),
-                "(use delete or view commands to manage)".dimmed()
-            );
+    if line_count > terminal_height as usize {
+        let pager = std::env::var("PAGER").unwrap_or_else(|_| "less".to_string());
+        let mut cmd = if pager == "less" || pager.ends_with("/less") {
+            let mut c = std::process::Command::new(&pager);
+            c.arg("-R"); // pass -R so less renders ANSI color codes
+            c
         } else {
-            println!("Total: {} note(s)", notes.len());
+            std::process::Command::new(&pager)
+        };
+        let mut child = cmd
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .context("Could not spawn pager")?;
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            stdin.write_all(output.as_bytes())?;
         }
+        child.wait()?;
+    } else {
+        print!("{}", output);
     }
 
     Ok(())
