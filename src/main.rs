@@ -29,6 +29,7 @@ enum Commands {
         content: Option<String>,
     },
     /// List all notes
+    #[command(visible_alias = "ls")]
     List,
     /// Delete notes by filter
     #[command(visible_alias = "del")]
